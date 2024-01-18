@@ -1687,7 +1687,7 @@ def processStream(ip, port, ip2, port2):
             packet_size = 188
 
             # Process the data in real-time
-            i = 0
+            #i = 0
             #variable for making the PMT packet
             pmtMade = False
             while True:
@@ -1719,7 +1719,7 @@ def processStream(ip, port, ip2, port2):
                 #if not null. i.e. ALWAYS SCTE, sometimes other packets, never PMT as dealt with before
                 elif(convPacket != bytearray()):
                     #print(i)
-                    i += 1
+                    #i += 1
                     file.seek(0)
                     file.write(convPacket)
                     #send over IP
