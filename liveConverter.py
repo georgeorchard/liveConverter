@@ -1665,6 +1665,8 @@ def processStream(ip, port, ip2, port2):
     """
     #Replace SCTE with DSMCC element
     replaceSCTEElement("pmtXML.xml", pid)
+    #save PMT packet as a variable
+    pmtPacket = ""
     
     #print(pmtPID)
     #print(pid)
@@ -1701,7 +1703,7 @@ def processStream(ip, port, ip2, port2):
                 #hex_representation = binascii.hexlify(packet).decode('utf-8')
                 
                 #write packet 2 to a file and send to IP ONLY if not empty
-                convPacket = convertSCTE(packet, nullChoice, function, pid, pmtPID)
+                
                 
                 currentPid = struct.unpack('>H', packet[1:3])[0] & 0x1FFF
                 #if PMT we need to convert
@@ -1713,18 +1715,23 @@ def processStream(ip, port, ip2, port2):
                         
                         replace_table("singlePMT.ts", pmtPID, "pmtXML.xml", "singlePMT.ts")
                         pmtMade = True
+                        #get the packet as a variable
+                        with open("singlePMT.ts", "rb") as file2:
+                            pmtPacket = file2.read(188)
+                            #print(pmtPacket)
                     process2 = subprocess.Popen(command4, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
-                    
-                    
-                #if not null. i.e. ALWAYS SCTE, sometimes other packets, never PMT as dealt with before
-                elif(convPacket != bytearray()):
-                    #print(i)
-                    #i += 1
-                    file.seek(0)
-                    file.write(convPacket)
-                    #send over IP
-                    process2 = subprocess.Popen(command2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
-            
+                    #print("PMT")
+                else:
+                    convPacket = convertSCTE(packet, nullChoice, function, pid, pmtPID)
+                    #if not null. i.e. ALWAYS SCTE, sometimes other packets, never PMT as dealt with before
+                    if(convPacket != bytearray()):
+                        #print(i)
+                        #i += 1
+                        file.seek(0)
+                        file.write(convPacket)
+                        #send over IP
+                        process2 = subprocess.Popen(command2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
+                        #print("DSMCC")
 
         except Exception as e:
             print(f"Error: {e}")
@@ -1765,4 +1772,3 @@ if __name__ == "__main__":
     
     
    
-
