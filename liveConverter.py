@@ -11,6 +11,7 @@ from datetime import datetime
 import xml.etree.ElementTree as ET
 #import hexdump
 import pkgutil
+import socket
 
 applicationVersionNumber = "1.0.0"
 version_count=1
@@ -1621,8 +1622,12 @@ def processStream(ip, port, ip2, port2):
     Returns:
     None
     """
-    #command = f"tsp -I ip {ip}:{port}"
-    command = f"tsp -I ip 5167"
+    #connect to the socket
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    
+    
+    command = f"tsp -I ip {ip}:{port}"
+    #command = f"tsp -I ip 5167"
     command2 = f"tsp -I file -i \"singlePacketFile.ts\" -O ip {ip2}:{port2}"
     #command3 = "tsp -I ip {ip}:{port} -P until --seconds 10 -O file \"first10Secs.ts\""
     command3 = "tsp -I ip 5167 -P until --seconds 100 -O file \"first10Secs.ts\""
@@ -1667,6 +1672,7 @@ def processStream(ip, port, ip2, port2):
     replaceSCTEElement("pmtXML.xml", pid)
     #save PMT packet as a variable
     pmtPacket = ""
+    #pmtPacketHex = ""
     
     #print(pmtPID)
     #print(pid)
@@ -1718,21 +1724,53 @@ def processStream(ip, port, ip2, port2):
                         #get the packet as a variable
                         with open("singlePMT.ts", "rb") as file2:
                             pmtPacket = file2.read(188)
+                            #pmtPacketHex = binascii.hexlify(pmtPacket).decode('utf-8')
                             #print(pmtPacket)
+                    """        
                     process2 = subprocess.Popen(command4, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
-                    #print("PMT")
+                    """
+                    #for when i can figure out how to packetise the output to IP
+                    #output(pmtPacket)
+                    """
+                    # Convert hex string to binary
+                    #subprocess_command = f"echo -n -e '{pmtPacket}' | tsp -O ip {ip2}:{port2}"
+                    hex_string = binascii.hexlify(pmtPacket).decode('utf-8')
+                    formatted_string = "\\x" + "\\x".join([hex_string[i:i+2] for i in range(0, len(hex_string), 2)])
+
+                    subprocess_command = f"echo -ne '{formatted_string}' | tsp -O ip {ip2}:{port2}"
+                    # Execute the command
+                    subprocess.run(subprocess_command, shell=True)
+                    """
+                    #send packet to socket
+                    udp_socket.sendto(pmtPacket, (ip2, port2))
+                    
                 else:
                     convPacket = convertSCTE(packet, nullChoice, function, pid, pmtPID)
                     #if not null. i.e. ALWAYS SCTE, sometimes other packets, never PMT as dealt with before
                     if(convPacket != bytearray()):
+                        """
                         #print(i)
                         #i += 1
                         file.seek(0)
                         file.write(convPacket)
                         #send over IP
                         process2 = subprocess.Popen(command2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
-                        #print("DSMCC")
+                        """
+                        """
+                        #for when i can figure out how to packetise the output to IP - this is all that is needed
+                        #output(convPacket)
+                         # Convert hex string to binary
+                        #subprocess_command = f"echo -n -e '{convPacket}' | tsp -O ip {ip2}:{port2}"
+                        
+                        hex_string = binascii.hexlify(convPacket).decode('utf-8')
+                        formatted_string = "\\x" + "\\x".join([hex_string[i:i+2] for i in range(0, len(hex_string), 2)])
 
+                        subprocess_command = f"echo -ne '{formatted_string}' | tsp -O ip {ip2}:{port2}"
+                        # Execute the command
+                        subprocess.run(subprocess_command, shell=True)
+                        """
+                        #send packet to socket
+                        udp_socket.sendto(convPacket, (ip2, port2))
         except Exception as e:
             print(f"Error: {e}")
 
