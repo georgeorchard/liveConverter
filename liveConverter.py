@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 #import hexdump
 import pkgutil
 import socket
+import time
 
 applicationVersionNumber = "1.0.0"
 version_count=1
@@ -175,7 +176,9 @@ def buildDSMCCPacket(scte35_payload, version_count, packet, cont_count):
     #4 (should be 12) as this is the length of the streamEventDescriptor without the private data bytes)
     
     #8 is the CRC_32
-    dsmcc_len = 6 + len (encoded_payload) + 4 + 8 + 4   
+    
+    #dsmcc_len = 6 + len (encoded_payload) + 4 + 8 + 4   
+    dsmcc_len = len(encoded_payload) + 4 + 5 + 12 + 8
     
     # 8 bits - Table ID
     # x3D means that section contains stream descriptors - [ISO/IEC 13818-6:1998  Table 9-3]
@@ -252,122 +255,7 @@ def buildDSMCCPacket(scte35_payload, version_count, packet, cont_count):
     
 
     
-    
-    
-    
-    
-    
-def replace_scte35(input_file, output_file, scte35_pid, replaceNull):
-    """
-    A function that replaces SCTE35 packets in a Transport Stream with DSMCC ones.
-    
-    Parameters:
-    input_file (String): The name of the file containig the input.
-    output_file (String): The name of the file for the output.
-    scte35_pid (int): The PID of the SCTE packets.
-    replaceNull(boolean): The option to replace null packets
-    
-    Returns:
-    null.
-    """
-    packetcount=0
-    events_replaced=0
-    events_notreplaced=0
-    """
-    version_count=1
-    cont_count = 1
-    """
-    adaptation_len=0
-    global version_count
-    global cont_count
-    #print ("Reading Input File :", input_file, "\nWriting Output File:", output_file, "\nSearching for SCTE35 Payload on PID: ", scte35_pid)
-    print( "\nSearching for SCTE35 Payload on PID: ", scte35_pid)
-    with open(input_file, 'rb') as input_stream, open (output_file, 'wb') as output_stream:
-        while True:
-            sync_byte = input_stream.read(1)
-
-
-            if not sync_byte:
-                break  # End of file
-            if sync_byte != b'\x47':
-                #print ("Packet Count :", packetcount, "\nSync Byte :", sync_byte )
-                raise ValueError('Invalid sync byte')
-            packet = sync_byte + input_stream.read(187)  # Read the entire packet
-
-            # Extract packet PID
-            pid = struct.unpack('>H', packet[1:3])[0] & 0x1FFF
-            cc =  struct.unpack('>B', packet[3:4])[0] & 0xFF
-
-            # Check if the packet contains SCTE35 payload
-            if pid == scte35_pid and packet[3] & 0x10:
-                # Extract SCTE35 payload
-                if packet [3] & 0x30 == 0x30:
-                    adaptation_len = packet [4] + 1
-                scte35_length = packet[7+adaptation_len]
-                #print(f"\nAdaption: {adaptation_len}")
-                #print(f"SCTE: {scte35_length}")
-                scte35_payload = packet[4+adaptation_len:4+scte35_length+4+adaptation_len]
-                if scte35_length != 17:
-                    #print("\nSCTE-35 Payload found in packet :", packetcount)
-                    #print("SCTE-35 Length :", scte35_length)
-                    #Extract SCTE35 information
-                    extractSCTEInformation(scte35_payload)
-                    #Create DSMCC packet
-                    dsmcc_packet = buildDSMCCPacket(scte35_payload, version_count, packet, cont_count)
-                    #Update cont_count
-                    cont_count += 1
-                    cont_count &= 0x0F
-                    events_replaced += 1
-                    
-                    # Write the DSM-CC packet to the output stream
-                    
-                    """
-                    
-                    section = '4740CB15003DB0490001C300001A3E0001FFFFFFFE0000000065794A6A623231745957356B496A6F67496E42795A574A315A6D5A6C6369497349434A786369493649475A6862484E6C66513D3D5852E0BCFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'
-                    dsmcc_packet = bytes.fromhex(section)
-                    """
-                    #if version_count == 3:
-                    #print ("\nWriting replacement packet:", packetcount)
-                    output_stream.write(dsmcc_packet)
-                    version_count += 1
-                #If SCTE is null    
-                else:
-                    #If replaceNUll is true or false
-                    if replaceNull==False:
-                        #Not converting null splice into DSM-CC
-                        #print ("SCTE Detected, len 17")
-                        events_notreplaced +=1
-                        #SEND STUFFED PACKET
-                        sendStuffedPacket(output_stream)
-                    
-                    else:
-                        #Still converting null splice into DSM-CC
-                        #Create DSMCC packet
-                        dsmcc_packet = buildDSMCCPacket(scte35_payload, version_count, packet, cont_count)
-                        #Update cont_count
-                        cont_count += 1
-                        cont_count &= 0x0F
-                        events_replaced += 1
-                        output_stream.write (dsmcc_packet)
-                    
-                    
-            else:
-                output_stream.write (packet)
-            packetcount +=1
-
-
-        print ("\nTotal SCTE Events Replaced: ", events_replaced)
-        print ("Total SCTE Events Ignored: ", events_notreplaced)
-        print ("SCTE to DSMCC replacement complete\n")
-        #print ("Total Packets Written: ", packetcount)
-
-
-
-
-
-
-
-
+   
 
 
 def find_pmt_pid(pat_data, target_service):
@@ -434,35 +322,6 @@ def replace_table(input_file, pid, tablexml, output_file):
     ]
     subprocess.run(cmd, check=True)
 
-
-
-
-
-
-
-def insert_table(input_file, pid, tablexml, reprate_ms, output_file):
-    """
-    Insert tables in the input file with the specified table XML at regular intervals.
-
-    Parameters:
-    input_file (str): The input file.
-    pid (int): The PID to insert the table.
-    tablexml (str): The table XML to inject.
-    reprate_ms (int): The repetition rate in milliseconds.
-    output_file (str): The output file.
-
-    Returns:
-    None
-    """
-    cmd = [
-        'tsp',
-        '-I', 'file', input_file,
-        '-P', 'inject',
-        '-p', str(pid),
-        f'{tablexml}={reprate_ms}',
-        '-O', 'file', output_file
-    ]
-    subprocess.run(cmd, check=True)
 
 
 
@@ -559,504 +418,7 @@ def replaceSCTEElement(xml_file, scte_pid):
     
     
     
-def addDSMCCToService(xml_file, scte_pid, input_file):
-    """
-    Function to add a DSMCC element to another PMT
-    
-    Parameters:
-    xml_file (str): The file containing the XML for the PMT.
-    scte_pid (str): The pid of the element to add
-    """
-    getXML(input_file)
-    target_component = None
-    choice = serviceChoice()
-    save_pmt_by_service_id("replacedDSMCCXML.xml", choice[0])
-    
-    
-    # Find the SCTE element
-    # Parse the XML file with ElementTree
-    tree = ET.parse(xml_file)
-    root = tree.getroot()
-    
-    # Find the PMT element within the root
-    pmt_element = root.find(".//PMT")
-
-    if pmt_element is not None:
-        # Find the specific component element with the given elementary_PID (scte_pid)
-        target_component = pmt_element.find(f".//component[@elementary_PID='{scte_pid}']")
-    else:
-        print("PMT element not found in the XML.")
-
-    
-    
-    # Insert the target component
-    # Parse the XML file with ElementTree
-    tree = ET.parse("replacedDSMCCXML.xml")
-    root = tree.getroot()
-
-    # Find the PMT element within the root
-    pmt_element = root.find(".//PMT")
-
-    if pmt_element is not None:
-        # Create the new component element
-        new_component = ET.Element("component", elementary_PID=choice[1], stream_type="0x05")
-
-        # Add the new component to the PMT
-        pmt_element.append(target_component)
-
-        # Save the modified XML
-        tree.write("replacedDSMCCXML.xml", encoding="utf-8", xml_declaration=True)
-        
-        
-        #Now need to update the TS with the PMT
-        intermediateFile = 'tempTS.ts'
-        copy_ts_file(input_file, intermediateFile)
-        print("Adding DSMCC to Specified PMT")
-        replace_table(intermediateFile, choice[1], "replacedDSMCCXML.xml", input_file)
-    else:
-        print("PMT element not found in the XML.")
-    
-    
-    
-
-def addAITComponentElement(xml_file, pid):
-    """
-    Function to add a new component element within the existing PMT XML using xml.etree.ElementTree.
-    
-    Parameters:
-    xml_file (str): The file containing the XML for the PMT.
-    pid (str): The hex PID for the new component element.
-    """
-    
-    # Parse the XML file with ElementTree
-    tree = ET.parse(xml_file)
-    root = tree.getroot()
-
-    # Find the PMT element within the root
-    pmt_element = root.find(".//PMT")
-
-    if pmt_element is not None:
-        # Create the new component element
-        new_component = ET.Element("component", elementary_PID=pid, stream_type="0x05")
-
-        # Create child elements for the new component
-        ET.SubElement(new_component, "stream_identifier_descriptor", component_tag="0xAA")
-        ET.SubElement(new_component, "application_signalling_descriptor")
-
-        # Add the new component to the PMT
-        pmt_element.append(new_component)
-
-        # Save the modified XML
-        tree.write(xml_file, encoding="utf-8", xml_declaration=True)
-    else:
-        print("PMT element not found in the XML.")
-    
  
- 
-
-
-
-def process_ts_file(input_file, output_file, processNumber, pmt_pid):
-    """
-    Function to process the input stream and send to an output stream
-    
-    Parameters:
-    input_file(String): The input file
-    output_file(String): The output file
-    processNumber(String): The number of the process
-    pmt_pid(string): The Hex PMT PID.
-    
-    Returns:
-    null
-    """
-    #Make PMT XML for the channel
-    save_pmt_by_service_id("pmtXML.xml", processNumber)
-    
-    print("\nSelect Process: ")
-    print("0: Replace SCTE-35 with DSM-CC")
-    print("1: Insert AIT")
-    print("2: Replace SCTE-35 with DSM-CC and Insert AIT")
-    print("3: Insert DSM-CC Data")
-    choice = int(input("Enter index of process choice: "))
-    
-    #IF BOTH
-    if choice == 2:
-        # Replace SCTE35 packets with DSMCC 
-        # Find SCTE Pid
-        scte_pid = getSCTEPID()
-        if scte_pid is not None:
-            int_scte_pid = int(str(scte_pid), 16)
-        else:
-            print("SCTE PID not found, run on service with SCTE")
-            sys.exit(0)
-        # Choice to replace null or not
-        print("\nReplace Null SCTE?: ")
-        print("0: No")
-        print("1: Yes")
-        nullChoice = int(input("Enter index of choice: "))
-        
-        if nullChoice == 1:
-            replace_scte35(input_file, "intermediate.ts", int_scte_pid, True)
-        else:
-            replace_scte35(input_file, "intermediate.ts", int_scte_pid, False)
-            
-        # Replace the SCTE Elements with DSMCC ones
-        print(f"Replacing SCTE Element with DSMCC in PMT")
-        replaceSCTEElement("pmtXML.xml", scte_pid)
-         
-            
-        
-        #insert rate
-        insertRate = (input("\nAIT Insert Rate (default is 1000): ")) 
-        if not insertRate:
-            insertRate = 1000
-        #find available PIDs
-        aitPID = findAvailablePIDs(int(pmt_pid,16))
-        hex_aitPID = '0x{:04x}'.format(aitPID)
-        
-        #Insert AIT Table
-        
-        print("\nChoose AIT Insertion Method: ")
-        print("0: From XML")
-        print("1: Manual")
-        choice2 = int(input("Enter index of AIT choice: "))
-        
-        if choice2 == 0:
-            aitXML = (input("\nXML File Name: "))
-            if not(aitXML.endswith('.xml')):
-                aitXML = aitXML+".xml"
-            print(f"Adding AIT Element to PMT")
-            insert_table('intermediate.ts', aitPID, aitXML, insertRate, 'intermediate-b.ts')
-        else:
-            #Input data
-            applicationID = (input("\nEnter Application ID: "))
-            organizationID = (input("Enter Organization ID: "))
-            url = (input("Enter URL: "))
-            applicationProfile = (input("Enter Profile (default is 0x0000): ")) 
-            if not applicationProfile:
-                applicationProfile = "0x0000"
-            applicationVersion = (input("Enter Application Version: "))
-            applicationName = (input("Enter Application Name: "))
-            initialPath = (input("Enter Initial Path (default is index.html): "))
-            if not initialPath:
-                initialPath = "index.html"
-            
-            #CreateFile
-            createAITXML(applicationID, organizationID, url, applicationProfile, applicationVersion, applicationName, initialPath)
-            
-            print(f"\nAdding AIT Element to PMT")
-            insert_table('intermediate.ts', aitPID, 'aitXML.xml', insertRate, 'intermediate-b.ts')
-        
-       
-        #Make new PMT
-        
-        
-        
-        #Add the AIT to the pmt
-        addAITComponentElement("pmtXML.xml", hex_aitPID)
-        
-        # PMT NEEDS TO ALTER AND INSERT
-        print(f"Replacing old PMT with new PMT")
-        replace_table("intermediate-b.ts", pmt_pid, 'pmtXML.xml', output_file)
-        
-        replaceChoice = True
-        while replaceChoice == True:
-            #adding the DSMCC Element to another service
-            print("\nAdd DSMCC Element to another service?: ")
-            print("0: No")
-            print("1: Yes")
-            dsmccChoice = int(input("Enter index of choice: "))
-            #if yes, add function
-            if dsmccChoice == 1:
-                addDSMCCToService("pmtXML.xml", scte_pid, output_file)
-            else:
-                replaceChoice = False   
-        
-        
-        
-        
-    #If just SCTE    
-    elif choice == 0:
-        # Replace SCTE35 packets with DSMCC 
-        # Find SCTE Pid
-        scte_pid = getSCTEPID()
-        if scte_pid is not None:
-            int_scte_pid = int(str(scte_pid), 16)
-        else:
-            print("SCTE PID not found, run on service with SCTE")
-            sys.exit(0)
-        
-        # Choice to replace null or not
-        print("\nReplace Null SCTE?: ")
-        print("0: No")
-        print("1: Yes")
-        nullChoice = int(input("Enter index of choice: "))
-        
- 
-        if nullChoice == 1:
-            replace_scte35(input_file, "intermediate.ts", int_scte_pid, True)
-        else:
-            replace_scte35(input_file, "intermediate.ts", int_scte_pid, False)
-            
-        # Make new PMT and insert
-        
-        
-        # Replace the SCTE Elements with DSMCC ones
-        print(f"Replacing SCTE Element with DSMCC in PMT")
-        replaceSCTEElement("pmtXML.xml", scte_pid)
-        
-        print(f"Replacing old PMT with new PMT")
-        replace_table("intermediate.ts", pmt_pid, 'pmtXML.xml', output_file)
-        
-        replaceChoice = True
-        while replaceChoice == True:
-            #adding the DSMCC Element to another service
-            print("\nAdd DSMCC Element to another service?: ")
-            print("0: No")
-            print("1: Yes")
-            dsmccChoice = int(input("Enter index of choice: "))
-            #if yes, add function
-            if dsmccChoice == 1:
-                addDSMCCToService("pmtXML.xml", scte_pid, output_file)
-            else:
-                replaceChoice = False
-        
-       
-
-
-    #If just AIT
-    elif choice == 1:
-        #Insert AIT Table
-        #insert rate
-        insertRate = (input("\nAIT Insert Rate (default is 1000): ")) 
-        if not insertRate:
-            insertRate = 1000
-        #find available PIDs
-        aitPID = findAvailablePIDs(int(pmt_pid,16))
-        hex_aitPID = hex_aitPID = '0x{:04x}'.format(aitPID)
-        #Insert AIT Table
-        
-        print("\nChoose AIT Insertion Method: ")
-        print("0: From XML")
-        print("1: Manual")
-        choice2 = int(input("Enter index of AIT choice: "))
-        
-        if choice2 == 0:
-            aitXML = (input("\nXML File Name: "))
-            if not(aitXML.endswith('.xml')):
-                aitXML = aitXML+".xml"
-            print(f"Adding AIT Element to PMT")
-            insert_table(input_file, aitPID, aitXML, insertRate, 'intermediate.ts')
-        else:
-            #Input data
-            applicationID = (input("\nEnter Application ID: "))
-            organizationID = (input("Enter Organization ID: "))
-            url = (input("Enter URL: "))
-            applicationProfile = (input("Enter Profile (default is 0x0000): ")) 
-            if not applicationProfile:
-                applicationProfile = "0x0000"
-            applicationVersion = (input("Enter Application Version: "))
-            applicationName = (input("Enter Application Name: "))
-            initialPath = (input("Enter Initial Path (default is index.html): "))
-            if not initialPath:
-                initialPath = "index.html"
-            
-            #CreateFile
-            createAITXML(applicationID, organizationID, url, applicationProfile, applicationVersion, applicationName, initialPath)
-            
-            print(f"\nAdding AIT Element to PMT")
-            insert_table(input_file, aitPID, 'aitXML.xml', insertRate, 'intermediate.ts')
-        
-        
-        
-        # Insert AIT element
-        addAITComponentElement("pmtXML.xml", hex_aitPID)
-        
-        # PMT NEEDS TO ALTER AND INSERT
-        print(f"Replacing old PMT with new PMT")
-        replace_table("intermediate.ts", pmt_pid, 'pmtXML.xml', output_file)
-    
-    #ELSE insert the DSMCC extra packet data
-    else:
-        #get the period
-        insertPeriod = int(input("\nEnter the insertion period (seconds): "))
-        
-        # Get the file size
-        file_size = os.path.getsize("intermediate.ts")
-        #convert Bytes to bits
-        file_size_bits = file_size * 8
-        #from the PMT get the maximum bitrate
-        bitrate = getMaximumBitrate()
-        
-        #remove commas
-        bitrate = bitrate.replace(',', '')
-        # Convert the string to an integer
-        bitrate = int(bitrate)
-        """
-        print(f"filesize bits {file_size_bits}")
-        print(f"filesize bytes {file_size}")
-        print(f"filesize packets {(file_size)/188}")
-        print(f"bitrate {bitrate}")
-        """
-        """
-        #find the seconds of the file
-        fileSeconds = file_size / 29772800 
-        print(f"file length = {fileSeconds}")
-        """
-        #figure out proportions
-        #file time
-        #fileSeconds = file_size_bits / 6000124
-        fileSeconds = file_size_bits / (bitrate/36)
-        #print(f"file seconds {fileSeconds}")
-        proportion = insertPeriod / fileSeconds
-        #print(f"proportion {proportion}")
-        
-        packetsInFile = (file_size)//188
-        #print(f"packetsInFile {packetsInFile}")
-        everyXPackets = int(proportion * packetsInFile)
-        """
-        #convert this into packets - each packet is 188 bytes.
-        #work out number of bits in x seconds
-        bitsInSeconds = bitrate * insertPeriod
-        #divide by packet size
-        everyXPackets = bitsInSeconds // (188*8)
-        """
-        #print(f"new one every {everyXPackets} packets.")
-        
-        
-        
-        
-        #get the file name
-        fileName = input("\nEnter the name of the text file containing the data: ")
-        if not(fileName.endswith('.txt')):
-                fileName = fileName+".txt"
-        #get the data from the file
-        with open(fileName, 'r') as file:
-            # Read the content of the file
-            file_content = file.read()
-        #convert string to packet[]
-        """
-        packets = []
-        for i in range(0, len(file_content), 188):
-            packet = file_content[i:i + 188]
-            packets.append(packet)
-            for i in range (0, len(packets)):
-                print(packets[i])
-        """
-        packets = file_content.encode('utf-8')
-        #find new PID for data packet
-        dataPID = findAvailablePIDs(int(pmt_pid,16))
-        hex_dataPID = '0x{:04x}'.format(dataPID)
-        #for the packet
-        result = 'FF' + hex_dataPID[2:]  # Skip the '0x' prefix when concatenating
-        result = bytes.fromhex(result)
-        #print(result)
-        #Append the file data into a dsmcc packet.
-        global version_count
-        global cont_count
-        #dsmcc_packet = buildDSMCCPacket(packets, version_count, bytes.fromhex("FFFFFFFFFFFFFFFF"), cont_count)
-        dsmcc_packet = buildDSMCCPacket(packets, version_count, result, cont_count)
-        #Update cont_count and version_count
-        cont_count += 1
-        cont_count &= 0x0F
-        version_count += 1
-        
-        
-        
-        #update the PMT
-        addDSMCCComponentElement("pmtXML.xml", hex_dataPID)
-
-        
-        
-        #add in at intervals
-        
-        # Get the file size
-        file_size = os.path.getsize("intermediate.ts")
-        # Calculate the estimated number of TS packets
-        num_packets = packetsInFile
-        print(f"Every {insertPeriod} seconds in a file of size {int(fileSeconds)} seconds is {int(fileSeconds // insertPeriod)} equally spaced insertions")
-        print(f"Every {everyXPackets} packets in a file of size {num_packets} packets is {num_packets // everyXPackets} equally spaced insertions")
-        
-        packet_size = 188
-        pid_mask = 0x1FFF
-        target_pid = 0x1FFF
-        file_path = "intermediate.ts"
-        
-        with open(file_path, 'r+b') as file:
-            while True:
-                # Read and process the current packet
-                packet_data = file.read(packet_size)
-                #print("Reading packet")
-
-                # Break if no more packets
-                if not packet_data:
-                    #print("NO MORE")
-                    break
-
-                # Seek everyXpackets
-                file.seek(packet_size * (everyXPackets - 1), os.SEEK_CUR)
-                #print(f"SEEKING {everyXPackets} packets, {packet_size * (everyXPackets - 1)} bytes")
-
-                # Find the nearest packet on target_pid
-                while True:
-                    next_packet_data = file.read(packet_size)
-                    if not next_packet_data:
-                        break
-
-                    next_pid = struct.unpack('>H', next_packet_data[1:3])[0] & pid_mask
-                    #print(next_pid)
-                    #print(next_pid)
-                    if next_pid == target_pid:
-                        #print(f"Found the next NULL PID {next_pid}")
-
-                        # Seek back to the beginning of the found packet
-                        file.seek(-packet_size, os.SEEK_CUR)
-
-                        # Write dsmcc_packet bytes to replace the packet
-                        #file.write(dsmcc_packet)
-
-                        # Seek everyXpackets again (correcting the offset)
-                        #file.seek(packet_size * (everyXPackets - 1), os.SEEK_CUR)
-                        #print(f"SEEKING {everyXPackets} packets, {packet_size * (everyXPackets - 1)} bytes")
-
-                        break
-                
-        #copy the TS File to the output file
-        print(f"Replacing old PMT with new PMT")
-        replace_table("intermediate.ts", pmt_pid, 'pmtXML.xml', output_file)
-        """
-        for i in range(0, num_packets, everyXPackets):
-            #get nearest null packet (PID = 1FFF)
-        """ 
-            
-        
-        
-
-    #Delete intermediate files
-    """
-    os.remove("intermediate.ts")
-    os.remove("intermediate-b.ts")
-    """
-
-
-def getMaximumBitrate():
-    try:
-        # Parse the XML file
-        tree = ET.parse("pmtXML.xml")
-        root = tree.getroot()
-
-        # Find the maximum_bitrate value
-        for maximum_bitrate_elem in root.iter('maximum_bitrate_descriptor'):
-            maximum_bitrate = maximum_bitrate_elem.attrib.get('maximum_bitrate', None)
-            if maximum_bitrate:
-                return maximum_bitrate
-                
-    except ET.ParseError as e:
-        print(f"Error parsing XML file: {e}")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-    return None
 
 def addDSMCCComponentElement(xml_file, pid):
     """
@@ -1224,7 +586,6 @@ def getXML(input_file):
     null
  
     """
-
     command = ['tsp', '-I', 'file', input_file, '-P', 'psi', '-x', "dataXML.xml", '-d']
        
        
@@ -1377,45 +738,6 @@ def serviceChoice():
 
 
 
-
-
-
-def processMultiple(input_file, output_file):
-    """
-    Function to process all of the service choices
-    
-    Parameters:
-    input_file(String): The input file
-    output_file(String): The output file
-    
-    Returns:
-    None
-    """
-    #Get the relevant XMLs for the file
-    getXML(input_file)
-    save_pat()
-    
-    #Get data about service chosen
-    choices = serviceChoice()
-    service = choices[0]
-    pmtPID = choices[1]
-   
-    #save_pmt_by_service_id("pmtXML.xml", service)
-    process_ts_file(input_file, output_file, service, pmtPID)
-    print("\n\nAnother Channel? ")
-    print("0: No")
-    print("1: Yes")
-    more = int(input("Enter index of choice: "))
-    if(more == 1):
-        getXML(output_file)
-        save_pat()
-        #Copy current output file to temp
-        tempFile = "tempTS.ts"
-        copy_ts_file(output_file, tempFile)
-        #Process temp file to output.
-        processMultiple(tempFile, output_file)
-    
-    
    
 
 def copy_ts_file(source_file, destination_file):
@@ -1532,6 +854,7 @@ def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
             version_count += 1
             return(dsmcc_packet)
             
+            
         #If SCTE is null    
         else:
             
@@ -1630,8 +953,9 @@ def processStream(ip, port, ip2, port2):
     #command = f"tsp -I ip 5167"
     command2 = f"tsp -I file -i \"singlePacketFile.ts\" -O ip {ip2}:{port2}"
     #command3 = "tsp -I ip {ip}:{port} -P until --seconds 10 -O file \"first10Secs.ts\""
-    command3 = "tsp -I ip 5167 -P until --seconds 100 -O file \"first10Secs.ts\""
-    
+    #command3 = "tsp -I ip 5167 -P until --seconds 10 -O file \"first10Secs.ts\""
+    #command3 = "tsp -I ip 5167 -P until --packets 1000000 -O file \"first10Secs.ts\""
+    command3 = "tsp -I ip {ip}:{port} -P until --packets 1000000 -O file \"first10Secs.ts\""
     command4 = f"tsp -I file -i \"singlePMT.ts\" -O ip {ip2}:{port2}"
    
     #give options
@@ -1653,6 +977,7 @@ def processStream(ip, port, ip2, port2):
     #READ FOR X SECONDS AND THEN DO NORMAL FUNCTIONS
     
     process3 = subprocess.Popen(command3, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
+    #time.sleep(1)
     getXML("first10Secs.ts")
     save_pat()
     
@@ -1685,100 +1010,158 @@ def processStream(ip, port, ip2, port2):
     pid = int(pid,16)
     #change the PMT
     
+    #start a BUFFER of 7 for the packets
+    buffer = []
     
-    with open("singlePacketFile.ts", "wb") as file:
-        try:
-            # Run the command and capture its output
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
-
-            # Define the packet size (188 bytes)
-            packet_size = 188
-
-            # Process the data in real-time
-            #i = 0
-            #variable for making the PMT packet
-            pmtMade = False
-            while True:
-                packet = process.stdout.read(packet_size)
-
-                # Check if the subprocess has finished
-                if not packet:
-                    break
-
     
-                #hex_representation = binascii.hexlify(packet).decode('utf-8')
+    
+    try:
+        # Run the command and capture its output
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
+
+        # Define the packet size (188 bytes)
+        packet_size = 188
+
+        # Process the data in real-time
+        #i = 0
+        #variable for making the PMT packet
+        pmtMade = False
+        #start a continuity counter
+        contCount = 0
+        
+        
+        while True:
+            packet = process.stdout.read(packet_size)
+
+            # Check if the subprocess has finished
+            if not packet:
+                break
+            
+            
+            currentPid = struct.unpack('>H', packet[1:3])[0] & 0x1FFF
+            #if PMT we need to convert
+            
+            
+            if(currentPid == pmtPID):
                 
-                #write packet 2 to a file and send to IP ONLY if not empty
-                
-                
-                currentPid = struct.unpack('>H', packet[1:3])[0] & 0x1FFF
-                #if PMT we need to convert
-                if(currentPid == pmtPID):
-                    if(pmtMade == False):
-                        with open("singlePMT.ts", "wb") as file2:
-                            file2.write(packet)
-                            
+                #uncomment the following if all PMT can be the same
+                #print(binascii.hexlify(packet).decode('utf-8'))
+                #If a PMT has not been made, make one
+                if(pmtMade == False):
+                    with open("singlePMT.ts", "wb") as file2:
+                        file2.write(packet)
+                    replace_table("singlePMT.ts", pmtPID, "pmtXML.xml", "singlePMT.ts")
+                    pmtMade = True
+                    #get the packet as a variable
+                    with open("singlePMT.ts", "rb") as file2:
+                        pmtPacket = file2.read(188)
+                        #pmtPacketHex = binascii.hexlify(pmtPacket).decode('utf-8')
+                        #print(pmtPacket)
                         
-                        replace_table("singlePMT.ts", pmtPID, "pmtXML.xml", "singlePMT.ts")
-                        pmtMade = True
-                        #get the packet as a variable
-                        with open("singlePMT.ts", "rb") as file2:
-                            pmtPacket = file2.read(188)
-                            #pmtPacketHex = binascii.hexlify(pmtPacket).decode('utf-8')
-                            #print(pmtPacket)
-                    """        
-                    process2 = subprocess.Popen(command4, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
+                
+                
+                
+                
+                hex_string = binascii.hexlify(pmtPacket).decode('utf-8')
+                new_hex = hex(contCount & 0xF)[2:]
+                
+
+                # Replace the corresponding portion of the original hex string
+                updated_string = hex_string[:7] + new_hex + hex_string[8:]
+                
+                #replace the CRC
+                #print(updated_string)
+                
+                
+                pmtPacketAlt = bytes.fromhex(updated_string)
+                #print(calculate_section_crc(pmtPacketAlt))
+                
+                
+                contCount += 1
+                contCount &= 0x0F
+                #want to send every 7 packets, buffer
+                buffer.append(pmtPacketAlt)
+                
+                """
+                #edit the cont count on the packet
+                hex_string = binascii.hexlify(packet).decode('utf-8')
+                new_hex = hex(contCount & 0xF)[2:]
+                # Replace the corresponding portion of the original hex string
+                updated_string = hex_string[:7] + new_hex + hex_string[8:]
+                packetUp = bytes.fromhex(updated_string)
+                #update cont
+                contCount += 1
+                contCount &= 0x0F
+                
+                with open("singlePMT.ts", "wb") as file2:
+                    file2.write(packetUp)
+                replace_table("singlePMT.ts", pmtPID, "pmtXML.xml", "singlePMT.ts")
+                pmtMade = True
+                #get the packet as a variable
+                with open("singlePMT.ts", "rb") as file2:
+                    pmtPacket = file2.read(188)    
+                buffer.append(pmtPacket)
+                """
+                
+                if(len(buffer) == 7):
+                    combined_buffer = b''.join(buffer)
+                    udp_socket.sendto(combined_buffer, (ip2, port2))
+                    #clear buffer
+                    buffer = []
+                
+                
+                #send packet to socket
+                #udp_socket.sendto(pmtPacketAlt, (ip2, port2))
+                
+                
+            else:
+                convPacket = convertSCTE(packet, nullChoice, function, pid, pmtPID)
+                #if not null. i.e. ALWAYS SCTE, sometimes other packets, never PMT as dealt with before
+                if(convPacket != bytearray()):
                     """
-                    #for when i can figure out how to packetise the output to IP
-                    #output(pmtPacket)
+                    #print(i)
+                    #i += 1
+                    file.seek(0)
+                    file.write(convPacket)
+                    #send over IP
+                    process2 = subprocess.Popen(command2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
                     """
-                    # Convert hex string to binary
-                    #subprocess_command = f"echo -n -e '{pmtPacket}' | tsp -O ip {ip2}:{port2}"
-                    hex_string = binascii.hexlify(pmtPacket).decode('utf-8')
+                    """
+                    #for when i can figure out how to packetise the output to IP - this is all that is needed
+                    #output(convPacket)
+                     # Convert hex string to binary
+                    #subprocess_command = f"echo -n -e '{convPacket}' | tsp -O ip {ip2}:{port2}"
+                    
+                    hex_string = binascii.hexlify(convPacket).decode('utf-8')
                     formatted_string = "\\x" + "\\x".join([hex_string[i:i+2] for i in range(0, len(hex_string), 2)])
 
                     subprocess_command = f"echo -ne '{formatted_string}' | tsp -O ip {ip2}:{port2}"
                     # Execute the command
                     subprocess.run(subprocess_command, shell=True)
                     """
-                    #send packet to socket
-                    udp_socket.sendto(pmtPacket, (ip2, port2))
                     
-                else:
-                    convPacket = convertSCTE(packet, nullChoice, function, pid, pmtPID)
-                    #if not null. i.e. ALWAYS SCTE, sometimes other packets, never PMT as dealt with before
-                    if(convPacket != bytearray()):
-                        """
-                        #print(i)
-                        #i += 1
-                        file.seek(0)
-                        file.write(convPacket)
-                        #send over IP
-                        process2 = subprocess.Popen(command2, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
-                        """
-                        """
-                        #for when i can figure out how to packetise the output to IP - this is all that is needed
-                        #output(convPacket)
-                         # Convert hex string to binary
-                        #subprocess_command = f"echo -n -e '{convPacket}' | tsp -O ip {ip2}:{port2}"
-                        
-                        hex_string = binascii.hexlify(convPacket).decode('utf-8')
-                        formatted_string = "\\x" + "\\x".join([hex_string[i:i+2] for i in range(0, len(hex_string), 2)])
+                    buffer.append(convPacket)
+                    if(len(buffer) == 7):
+                            
+                        combined_buffer = b''.join(buffer)
+                        udp_socket.sendto(combined_buffer, (ip2, port2))
+                        #clear buffer
+                        buffer = []
+                    
+                    
+                    
+                    #send packet to socket
+                    #udp_socket.sendto(convPacket, (ip2, port2))
+                    
+                    
+    except Exception as e:
+        print(f"Error: {e}")
 
-                        subprocess_command = f"echo -ne '{formatted_string}' | tsp -O ip {ip2}:{port2}"
-                        # Execute the command
-                        subprocess.run(subprocess_command, shell=True)
-                        """
-                        #send packet to socket
-                        udp_socket.sendto(convPacket, (ip2, port2))
-        except Exception as e:
-            print(f"Error: {e}")
+    finally:
+        # Ensure the subprocess is properly closed
+        process.terminate()
+        process.wait()
 
-        finally:
-            # Ensure the subprocess is properly closed
-            process.terminate()
-            process.wait()
-    
   
     
     
@@ -1797,6 +1180,9 @@ if __name__ == "__main__":
     ip2 = argv[3]
     port2 = int(argv[4])
     
+    
+    
+    
     print(f"Live Converter Version: {applicationVersionNumber}\n")
     #Check for TS Duck
     if not(check_tsduck_version):
@@ -1804,7 +1190,7 @@ if __name__ == "__main__":
        sys.exit(0)
     else: 
         processStream(ip, port, ip2, port2)
-        
+     
     
     
     
