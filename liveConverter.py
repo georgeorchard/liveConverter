@@ -182,7 +182,8 @@ def buildDSMCCPacket(scte35_payload, version_count, packet, cont_count):
     
     # 8 bits - Table ID
     # x3D means that section contains stream descriptors - [ISO/IEC 13818-6:1998  Table 9-3]
-    dsmcc_packet += b'\x00\x3D'  
+    #dsmcc_packet += b'\x00\x3D'  
+    dsmcc_packet += b'\x3D' 
     
     
     #8 bits
@@ -949,13 +950,13 @@ def processStream(ip, port, ip2, port2):
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
     
-    command = f"tsp -I ip {ip}:{port}"
-    #command = f"tsp -I ip 5167"
+    #command = f"tsp -I ip {ip}:{port}"
+    command = f"tsp -I ip 5167"
     command2 = f"tsp -I file -i \"singlePacketFile.ts\" -O ip {ip2}:{port2}"
     #command3 = "tsp -I ip {ip}:{port} -P until --seconds 10 -O file \"first10Secs.ts\""
     #command3 = "tsp -I ip 5167 -P until --seconds 10 -O file \"first10Secs.ts\""
-    #command3 = "tsp -I ip 5167 -P until --packets 1000000 -O file \"first10Secs.ts\""
-    command3 = "tsp -I ip {ip}:{port} -P until --packets 1000000 -O file \"first10Secs.ts\""
+    command3 = "tsp -I ip 5167 -P until --packets 1000000 -O file \"first10Secs.ts\""
+    
     command4 = f"tsp -I file -i \"singlePMT.ts\" -O ip {ip2}:{port2}"
    
     #give options
