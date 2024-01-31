@@ -1032,6 +1032,7 @@ def processStream(ip, port, ip2, port2):
         
         
         while True:
+            
             packet = process.stdout.read(packet_size)
 
             # Check if the subprocess has finished
@@ -1044,11 +1045,12 @@ def processStream(ip, port, ip2, port2):
             
             
             if(currentPid == pmtPID):
-                
+                #print(f"\n{binascii.hexlify(packet).decode('utf-8')}")
                 #uncomment the following if all PMT can be the same
                 #print(binascii.hexlify(packet).decode('utf-8'))
                 #If a PMT has not been made, make one
                 if(pmtMade == False):
+                    
                     with open("singlePMT.ts", "wb") as file2:
                         file2.write(packet)
                     replace_table("singlePMT.ts", pmtPID, "pmtXML.xml", "singlePMT.ts")
@@ -1101,18 +1103,21 @@ def processStream(ip, port, ip2, port2):
                 #get the packet as a variable
                 with open("singlePMT.ts", "rb") as file2:
                     pmtPacket = file2.read(188)    
-                buffer.append(pmtPacket)
+                
                 """
                 
+                """
+                buffer.append(pmtPacket)
                 if(len(buffer) == 7):
                     combined_buffer = b''.join(buffer)
                     udp_socket.sendto(combined_buffer, (ip2, port2))
                     #clear buffer
                     buffer = []
-                
-                
+                """
+                #print(binascii.hexlify(pmtPacketAlt).decode('utf-8'))
                 #send packet to socket
-                #udp_socket.sendto(pmtPacketAlt, (ip2, port2))
+                udp_socket.sendto(pmtPacketAlt, (ip2, port2))
+                
                 
                 
             else:
@@ -1141,6 +1146,7 @@ def processStream(ip, port, ip2, port2):
                     subprocess.run(subprocess_command, shell=True)
                     """
                     
+                    """
                     buffer.append(convPacket)
                     if(len(buffer) == 7):
                             
@@ -1148,11 +1154,11 @@ def processStream(ip, port, ip2, port2):
                         udp_socket.sendto(combined_buffer, (ip2, port2))
                         #clear buffer
                         buffer = []
-                    
+                    """
                     
                     
                     #send packet to socket
-                    #udp_socket.sendto(convPacket, (ip2, port2))
+                    udp_socket.sendto(convPacket, (ip2, port2))
                     
                     
     except Exception as e:
