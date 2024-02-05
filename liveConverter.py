@@ -950,7 +950,7 @@ def processStream(ip, port, ip2, port2):
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
     
-    command = f"tsp -I ip {ip}:{port}"
+    command = f"tsp -I ip {port}"
     #command = f"tsp -I ip 5167"
     
     
@@ -958,7 +958,7 @@ def processStream(ip, port, ip2, port2):
     
     
     #command3 = "tsp -I ip 5167 -P until --packets 1000000 -O file \"first10Secs.ts\""
-    command3 = f"tsp -I ip {ip}:{port} -P until --packets 1000000 -O file \"first10Secs.ts\""
+    command3 = f"tsp -I ip {port} -P until --packets 1000000 -O file \"first10Secs.ts\""
     
     command4 = f"tsp -I file -i \"singlePMT.ts\" -O ip {ip2}:{port2}"
    
