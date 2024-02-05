@@ -14,7 +14,7 @@ import pkgutil
 import socket
 import time
 
-applicationVersionNumber = "1.0.1"
+applicationVersionNumber = "1.0.2"
 version_count=1
 cont_count = 1
 
@@ -853,6 +853,7 @@ def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
             #print ("\nWriting replacement packet:", packetcount)
             #output_stream.write(dsmcc_packet)
             version_count += 1
+            print(f"DSMCC Packet Replacement for SCTE35 message on PID {sctePid} written to file")
             return(dsmcc_packet)
             
             
@@ -882,8 +883,9 @@ def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
                 cont_count &= 0x0F
                 #events_replaced += 1
                 #output_stream.write (dsmcc_packet)
+                print(f"DSMCC Packet Replacement for NULL SCTE35 message on PID {sctePid} written to file")
                 return(dsmcc_packet)
-            
+    #wont reach, already accounted for.     
     elif(pid == pmtPID):
         
             
