@@ -14,7 +14,7 @@ import pkgutil
 import socket
 import time
 
-applicationVersionNumber = "1.0.2"
+applicationVersionNumber = "1.2.0"
 version_count=1
 cont_count = 1
 
@@ -539,17 +539,17 @@ def createAITXML(applicationID, organizationID, url, applicationProfile, applica
 
 
 
-def getSCTEPID():
+def getSCTEPID(fileName):
     """
     A function to get the SCTE PID from the PMT
     
     Parameters:
-    None
+    fileName(string): The name of the file
     
     Returns:
     scte_pid(String): The SCTE PID
     """
-    tree = ET.parse("pmtXML.xml")
+    tree = ET.parse(fileName)
     root = tree.getroot()
 
     # Find the PMT tag
@@ -798,7 +798,7 @@ def check_tsduck_version():
 
 
 
-def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
+def convertSCTE(packet, replaceNull, function, sctePids, scteCont):
     """
     A function to convert SCTE to DSMCC given a SCTE packet
     Parameters:
@@ -806,7 +806,7 @@ def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
     replaceNull(Boolean): Replacing nulls
     function(int): The function
     sctePid(int): The scte pid
-    pmtPID(int): The pmt pid
+    scteCont(int): The cont
     Returns
     packet(byte[]): The DSMCC Packet
     """
@@ -819,7 +819,7 @@ def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
     cc =  struct.unpack('>B', packet[3:4])[0] & 0xFF
 
     # Check if the packet contains SCTE35 payload
-    if pid == sctePid and packet[3] & 0x10:
+    if pid in sctePids and packet[3] & 0x10:
     
         #print(f"SCTE!")
         # Extract SCTE35 payload
@@ -836,10 +836,12 @@ def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
             #Extract SCTE35 information
             extractSCTEInformation(scte35_payload)
             #Create DSMCC packet
-            dsmcc_packet = buildDSMCCPacket(scte35_payload, version_count, packet, cont_count)
+            dsmcc_packet = buildDSMCCPacket(scte35_payload, version_count, packet, scteCont)
+            """
             #Update cont_count
             cont_count += 1
             cont_count &= 0x0F
+            """
             #events_replaced += 1
             
             # Write the DSM-CC packet to the output stream
@@ -853,7 +855,7 @@ def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
             #print ("\nWriting replacement packet:", packetcount)
             #output_stream.write(dsmcc_packet)
             version_count += 1
-            print(f"DSMCC Packet Replacement for SCTE35 message on PID {sctePid} written to file")
+            print(f"DSMCC Packet Replacement for SCTE35 message on PID {pid} written to file")
             return(dsmcc_packet)
             
             
@@ -883,50 +885,8 @@ def convertSCTE(packet, replaceNull, function, sctePid, pmtPID):
                 cont_count &= 0x0F
                 #events_replaced += 1
                 #output_stream.write (dsmcc_packet)
-                print(f"DSMCC Packet Replacement for NULL SCTE35 message on PID {sctePid} written to file")
-                return(dsmcc_packet)
-    #wont reach, already accounted for.     
-    elif(pid == pmtPID):
-        
-            
-        """
-        #do something here
-        hex_string = binascii.hexlify(packet).decode('utf-8')
-        
-         # Step 1: Locate and change '86e0{var1}' by replacing '86' with '0C' STREAM TYPE CHANGE
-        hex_string = hex_string.replace('86e0', '0Ce0', 1)
-
-        # Step 2: Find the byte after var1 that is '03' and change it to '06' ACCOUNT FOR STREAM IDENTIFIER
-        index_var1 = hex_string.find('0Ce0') + 8  # Find the position after '0Ce0'
-        hex_string = hex_string[:index_var1] + '06' + hex_string[index_var1 + 2:]
-        
-        # Step 3: Insert '520109' after the modified bytes STREAM IDENTIFIER TAG
-        #MIGHT NEED TO JUST TAKE 01 OUT HERE WHO KNOWS
-        #hex_string = hex_string[:index_var1 + 2] + '5209' + hex_string[index_var1 + 2:]
-        hex_string = hex_string[:index_var1 + 2] + '520109' + hex_string[index_var1 + 2:]
-
-        # Step 4: Find the next occurrence of '02' and change it to '09' TAG
-        index_02 = hex_string.find('02', index_var1 + 2)
-        hex_string = hex_string[:index_02] + '09' + hex_string[index_02 + 2:]
-
-       
-
-        # Step 5: Ensure the string is exactly 188 bytes long by padding with '00'
-        hex_string = hex_string[:376]
-
-        # Step 6: Convert to bytes
-        
-        byte_array = bytes.fromhex(hex_string)
-        #print(hex_string)
-        return(byte_array)
-        """
-        #save to its own file
-        """
-        with open("singlePMT.ts", "wb") as file:
-            file.write(packet)
-        return(packet)
-        """
-        return(bytearray())
+                print(f"DSMCC Packet Replacement for NULL SCTE35 message on PID {pid} written to file")
+                return(dsmcc_packet) 
     else:
         #output_stream.write (packet)
         if(function == 0):
@@ -960,7 +920,9 @@ def processStream(ip, port, ip2, port2):
     
     
     #command3 = "tsp -I ip 5167 -P until --packets 1000000 -O file \"first10Secs.ts\""
-    command3 = f"tsp -I ip {port} -P until --packets 1000000 -O file \"first10Secs.ts\""
+    #command3 = f"tsp -I ip {port} -P until --packets 100000 -O file \"first10Secs.ts\""
+    #command3 = "tsp -I ip 5167 -P until --seconds 10 -O file \"first10Secs.ts\""
+    command3 = f"tsp -I ip {port} -P until --seconds 3 -O file \"first10Secs.ts\""
     
     command4 = f"tsp -I file -i \"singlePMT.ts\" -O ip {ip2}:{port2}"
    
@@ -983,38 +945,76 @@ def processStream(ip, port, ip2, port2):
     #READ FOR X SECONDS AND THEN DO NORMAL FUNCTIONS
     
     process3 = subprocess.Popen(command3, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
-    #time.sleep(1)
+    time.sleep(4)
     getXML("first10Secs.ts")
     save_pat()
     
     #Get data about service chosen
-    print("")
-    choices = serviceChoice()
-    service = choices[0]
-    pmtPID = choices[1]
-    save_pmt_by_service_id("pmtXML.xml", service)
-    #SCTE PID
-    pid = getSCTEPID()
-    """
-    hexPid = hex(pid)[2:].zfill(4)
-    hexPid = '0x' + hexPid
-    """
-    #Replace SCTE with DSMCC element
-    replaceSCTEElement("pmtXML.xml", pid)
-    #save PMT packet as a variable
-    pmtPacket = ""
-    #pmtPacketHex = ""
+    #multiple services
+    serviceCounter = 0
     
-    #print(pmtPID)
-    #print(pid)
+    #need an array that stores PIDs against service numbers
+    pmtPIDs = []
+    sctePIDs = []
+    
+    #locals()[f"variable_{i}"] = i
+    anotherService = True
+    while(anotherService):
+        print("")
+        choices = serviceChoice()
+        service = choices[0]
+        pmtPID = choices[1]
+        save_pmt_by_service_id(f"pmtXML{serviceCounter}.xml", service)
+        
+        #SCTE PID
+        pid = getSCTEPID(f"pmtXML{serviceCounter}.xml")
+        
+        """
+        hexPid = hex(pid)[2:].zfill(4)
+        hexPid = '0x' + hexPid
+        """
+        #Replace SCTE with DSMCC element
+        replaceSCTEElement(f"pmtXML{serviceCounter}.xml", pid)
+        #save PMT packet as a variable
+        pmtPacket = ""
+        #pmtPacketHex = ""
+        
+        #print(pmtPID)
+        #print(pid)
+        
+        
+        #get the PMT PID from chosen service
+        #locals()[f"pmtPID{serviceCounter}"] = int(pmtPID, 16)
+        pmtPIDs.append(int(pmtPID, 16))
+        
+        #get SCTE PID
+        #locals()[f"pid{serviceCounter}"] = int(pid, 16)
+        sctePIDs.append(int(pid, 16))
+        #change the PMT
+        
+        print("\nAnother Service?")
+        print("0: No")
+        print("1: Yes")
+        anotherServiceChoice = int(input("Enter index of choice: "))
+        if(anotherServiceChoice == 0):
+            anotherService = False
+        else:
+            anotherService = True
+            serviceCounter += 1
+    
+    print(f"\nPMT PIDs: {pmtPIDs}")
+    print(f"SCTE PIDs: {sctePIDs}\n")
+    
+    #create an array of equal length to the pmtPIDs one, all false 
+    pmtMadeArray = [False] * len(pmtPIDs)
+    
+    #create a PMT packet for all pmts
+    for i in range (0, len(pmtMadeArray)):
+        locals()[f"pmtPacket{serviceCounter}"] = ""
     
     
-    #get the PMT PID from chosen service
-    pmtPID = int(pmtPID, 16)
-    #get SCTE PID
     
-    pid = int(pid,16)
-    #change the PMT
+    
     
     #start a BUFFER of 7 for the packets
     buffer = []
@@ -1032,8 +1032,10 @@ def processStream(ip, port, ip2, port2):
         #i = 0
         #variable for making the PMT packet
         pmtMade = False
-        #start a continuity counter
-        contCount = 0
+        #start a continuity counter for each PID
+        pmtContCounts = [0]*len(pmtPIDs)
+        #start a continuity counter for each SCTE
+        scteContCounts = [0]*len(pmtPIDs)
         
         
         while True:
@@ -1046,29 +1048,38 @@ def processStream(ip, port, ip2, port2):
             
             
             currentPid = struct.unpack('>H', packet[1:3])[0] & 0x1FFF
+            #print(currentPid)
             #if PMT we need to convert
             
+            #check if any of the PMT PIDs
             
-            if(currentPid == pmtPID):
+            if(currentPid in pmtPIDs):
+            
+            
                 #print(f"\n{binascii.hexlify(packet).decode('utf-8')}")
                 #uncomment the following if all PMT can be the same
                 #print(binascii.hexlify(packet).decode('utf-8'))
+                
+                #get the INDEX
+                index = pmtPIDs.index(currentPid)
+                
                 #If a PMT has not been made, make one
-                if(pmtMade == False):
+                if(pmtMadeArray[index] == False):
                     
                     with open("singlePMT.ts", "wb") as file2:
                         file2.write(packet)
-                    replace_table("singlePMT.ts", pmtPID, "pmtXML.xml", "singlePMT.ts")
-                    pmtMade = True
+                    replace_table("singlePMT.ts", pmtPIDs[index], f"pmtXML{index}.xml", "singlePMT.ts")
+                    pmtMadeArray[index] = True
                     #get the packet as a variable
                     with open("singlePMT.ts", "rb") as file2:
-                        pmtPacket = file2.read(188)
+                        locals()[f"pmtPacket{index}"] = file2.read(188)
                         #pmtPacketHex = binascii.hexlify(pmtPacket).decode('utf-8')
                         #print(pmtPacket)
                         
                 
-                hex_string = binascii.hexlify(pmtPacket).decode('utf-8')
-                new_hex = hex(contCount & 0xF)[2:]
+                hex_string = binascii.hexlify(locals()[f"pmtPacket{index}"]).decode('utf-8')
+                new_hex = hex(pmtContCounts[index] & 0xF)[2:]
+                print(f"PMT inserted on PMT PID {currentPid}")
                 
 
                 # Replace the corresponding portion of the original hex string
@@ -1079,11 +1090,15 @@ def processStream(ip, port, ip2, port2):
                 
                 
                 pmtPacketAlt = bytes.fromhex(updated_string)
+                
+          
                 #print(calculate_section_crc(pmtPacketAlt))
                 
                 
-                contCount += 1
-                contCount &= 0x0F
+                pmtContCounts[index] += 1
+                pmtContCounts[index] &= 0x0F
+                #print(contCounts)
+                
                 #want to send every 7 packets, buffer
                 buffer.append(pmtPacketAlt)
                 
@@ -1105,7 +1120,13 @@ def processStream(ip, port, ip2, port2):
                 
                 
             else:
-                convPacket = convertSCTE(packet, nullChoice, function, pid, pmtPID)
+                #cont counts
+                index = sctePIDs.index(currentPid) if currentPid in sctePIDs else -1
+                
+                convPacket = convertSCTE(packet, nullChoice, function, sctePIDs, scteContCounts[index])
+                if index != -1:
+                    scteContCounts[index] += 1
+                    scteContCounts[index] &= 0x0F
                 #if not null. i.e. ALWAYS SCTE, sometimes other packets, never PMT as dealt with before
                 if(convPacket != bytearray()):
                     
@@ -1129,6 +1150,8 @@ def processStream(ip, port, ip2, port2):
                     
     except Exception as e:
         print(f"Error: {e}")
+        
+        
 
     finally:
         # Ensure the subprocess is properly closed
