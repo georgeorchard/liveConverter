@@ -14,7 +14,7 @@ import pkgutil
 import socket
 import time
 
-applicationVersionNumber = "1.2.0"
+applicationVersionNumber = "1.2.1"
 version_count=1
 cont_count = 1
 
@@ -855,7 +855,7 @@ def convertSCTE(packet, replaceNull, function, sctePids, scteCont):
             #print ("\nWriting replacement packet:", packetcount)
             #output_stream.write(dsmcc_packet)
             version_count += 1
-            print(f"DSMCC Packet Replacement for SCTE35 message on PID {pid} written to file")
+            print(f"DSMCC Packet Replacement for SCTE35 message on PID {pid} written to file (SCTE35 Continuity Counter {scteCont})")
             return(dsmcc_packet)
             
             
@@ -879,13 +879,15 @@ def convertSCTE(packet, replaceNull, function, sctePids, scteCont):
             else:
                 #Still converting null splice into DSM-CC
                 #Create DSMCC packet
-                dsmcc_packet = buildDSMCCPacket(scte35_payload, version_count, packet, cont_count)
+                dsmcc_packet = buildDSMCCPacket(scte35_payload, version_count, packet, scteCont)
+                """
                 #Update cont_count
                 cont_count += 1
                 cont_count &= 0x0F
+                """
                 #events_replaced += 1
                 #output_stream.write (dsmcc_packet)
-                print(f"DSMCC Packet Replacement for NULL SCTE35 message on PID {pid} written to file")
+                print(f"DSMCC Packet Replacement for NULL SCTE35 message on PID {pid} written to file (SCTE35 Continuity Counter {scteCont})")
                 return(dsmcc_packet) 
     else:
         #output_stream.write (packet)
@@ -922,7 +924,7 @@ def processStream(ip, port, ip2, port2):
     #command3 = "tsp -I ip 5167 -P until --packets 1000000 -O file \"first10Secs.ts\""
     #command3 = f"tsp -I ip {port} -P until --packets 100000 -O file \"first10Secs.ts\""
     #command3 = "tsp -I ip 5167 -P until --seconds 10 -O file \"first10Secs.ts\""
-    command3 = f"tsp -I ip {port} -P until --seconds 3 -O file \"first10Secs.ts\""
+    command3 = f"tsp -I ip {port} -P until --seconds 1 -O file \"first10Secs.ts\""
     
     command4 = f"tsp -I file -i \"singlePMT.ts\" -O ip {ip2}:{port2}"
    
@@ -945,7 +947,7 @@ def processStream(ip, port, ip2, port2):
     #READ FOR X SECONDS AND THEN DO NORMAL FUNCTIONS
     
     process3 = subprocess.Popen(command3, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0)
-    time.sleep(4)
+    time.sleep(1.5)
     getXML("first10Secs.ts")
     save_pat()
     
@@ -1055,11 +1057,6 @@ def processStream(ip, port, ip2, port2):
             
             if(currentPid in pmtPIDs):
             
-            
-                #print(f"\n{binascii.hexlify(packet).decode('utf-8')}")
-                #uncomment the following if all PMT can be the same
-                #print(binascii.hexlify(packet).decode('utf-8'))
-                
                 #get the INDEX
                 index = pmtPIDs.index(currentPid)
                 
@@ -1079,7 +1076,7 @@ def processStream(ip, port, ip2, port2):
                 
                 hex_string = binascii.hexlify(locals()[f"pmtPacket{index}"]).decode('utf-8')
                 new_hex = hex(pmtContCounts[index] & 0xF)[2:]
-                print(f"PMT inserted on PMT PID {currentPid}")
+                print(f"PMT inserted on PMT PID {currentPid} (PMT Continuity Counter {pmtContCounts[index] & 0xF})")
                 
 
                 # Replace the corresponding portion of the original hex string
@@ -1092,12 +1089,12 @@ def processStream(ip, port, ip2, port2):
                 pmtPacketAlt = bytes.fromhex(updated_string)
                 
           
-                #print(calculate_section_crc(pmtPacketAlt))
+               
                 
-                
+                #update cont counts
                 pmtContCounts[index] += 1
                 pmtContCounts[index] &= 0x0F
-                #print(contCounts)
+                
                 
                 #want to send every 7 packets, buffer
                 buffer.append(pmtPacketAlt)
@@ -1105,13 +1102,14 @@ def processStream(ip, port, ip2, port2):
              
                 
                 
-                
+                """
                 if(len(buffer) == 7):
+                
                     combined_buffer = b''.join(buffer)
                     udp_socket.sendto(combined_buffer, (ip2, port2))
                     #clear buffer
                     buffer = []
-                
+                """
                 #print(binascii.hexlify(pmtPacketAlt).decode('utf-8'))
                 #send packet to socket
                 """
@@ -1124,22 +1122,28 @@ def processStream(ip, port, ip2, port2):
                 index = sctePIDs.index(currentPid) if currentPid in sctePIDs else -1
                 
                 convPacket = convertSCTE(packet, nullChoice, function, sctePIDs, scteContCounts[index])
-                if index != -1:
-                    scteContCounts[index] += 1
-                    scteContCounts[index] &= 0x0F
+                #only increment null SCTE if replace null selected, if null packet is returned
+                #check if null packet, only increment if NOT null packet
+                if(currentPid in sctePIDs):
+                    hex_string = binascii.hexlify(convPacket).decode('utf-8')
+                    #print(hex_string)
+                    if not(hex_string.startswith("471fff")):
+                        if index != -1:
+                            scteContCounts[index] += 1
+                            scteContCounts[index] &= 0x0F
+               
+                    
                 #if not null. i.e. ALWAYS SCTE, sometimes other packets, never PMT as dealt with before
                 if(convPacket != bytearray()):
-                    
-                    
-                    
                     buffer.append(convPacket)
+                    """
                     if(len(buffer) == 7):
                             
                         combined_buffer = b''.join(buffer)
                         udp_socket.sendto(combined_buffer, (ip2, port2))
                         #clear buffer
                         buffer = []
-                    
+                    """
                     
                     
                     #send packet to socket
@@ -1147,6 +1151,11 @@ def processStream(ip, port, ip2, port2):
                     udp_socket.sendto(convPacket, (ip2, port2))
                     """
                     
+            if(len(buffer) == 7):
+                combined_buffer = b''.join(buffer)
+                udp_socket.sendto(combined_buffer, (ip2, port2))
+                #clear buffer
+                buffer = []        
                     
     except Exception as e:
         print(f"Error: {e}")
