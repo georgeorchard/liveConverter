@@ -14,7 +14,7 @@ import pkgutil
 import socket
 import time
 
-applicationVersionNumber = "1.2.1"
+applicationVersionNumber = "1.2.2"
 version_count=1
 cont_count = 1
 
@@ -319,6 +319,7 @@ def replace_table(input_file, pid, tablexml, output_file):
         '-P', 'inject',
         '-p', str(pid),
         '-r', tablexml,
+        '-s',
         '-O', 'file', output_file
     ]
     subprocess.run(cmd, check=True)
