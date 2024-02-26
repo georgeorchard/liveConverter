@@ -229,7 +229,8 @@ def buildDSMCCPacket(scte35_payload, version_count, packet, cont_count):
     dsmcc_packet += b'\x1a'
     
     #8 bits - Descriptor length (think this should be 10 + len(encoded_payload))
-    dsmcc_payload_len = len (encoded_payload) + 4
+    #dsmcc_payload_len = len (encoded_payload) + 4
+    dsmcc_payload_len = len (encoded_payload) + 10
     dsmcc_packet += (dsmcc_payload_len & 0x00FF).to_bytes (1, 'big') 
     
     
